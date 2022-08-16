@@ -64,18 +64,10 @@ public abstract class AbstractHttpClientFactory implements HttpClientFactory {
         final JdkHttpClientRequest clientRequest = new JdkHttpClientRequest(httpClientConfig);
         
         // enable ssl
-        initTls(new BiConsumer<SSLContext, HostnameVerifier>() {
-            @Override
-            public void accept(SSLContext sslContext, HostnameVerifier hostnameVerifier) {
-                clientRequest.setSSLContext(loadSSLContext());
-                clientRequest.replaceSSLHostnameVerifier(hostnameVerifier);
-            }
-        }, new TlsFileWatcher.FileChangeListener() {
-            @Override
-            public void onChanged(String filePath) {
-                clientRequest.setSSLContext(loadSSLContext());
-            }
-        });
+        initTls((sslContext, hostnameVerifier) -> {
+            clientRequest.setSSLContext(loadSSLContext());
+            clientRequest.replaceSSLHostnameVerifier(hostnameVerifier);
+        }, filePath -> clientRequest.setSSLContext(loadSSLContext()));
         
         return new NacosRestTemplate(assignLogger(), clientRequest);
     }
@@ -84,16 +76,17 @@ public abstract class AbstractHttpClientFactory implements HttpClientFactory {
     public NacosAsyncRestTemplate createNacosAsyncRestTemplate() {
         final HttpClientConfig originalRequestConfig = buildHttpClientConfig();
         final DefaultConnectingIOReactor ioreactor = getIoReactor();
+        final RequestConfig defaultConfig = getRequestConfig();
         return new NacosAsyncRestTemplate(assignLogger(), new DefaultAsyncHttpClientRequest(
                 HttpAsyncClients.custom()
                         .addInterceptorLast(new RequestContent(true))
                         .setDefaultIOReactorConfig(getIoReactorConfig())
-                        .setDefaultRequestConfig(getRequestConfig())
+                        .setDefaultRequestConfig(defaultConfig)
                         .setMaxConnTotal(originalRequestConfig.getMaxConnTotal())
                         .setMaxConnPerRoute(originalRequestConfig.getMaxConnPerRoute())
                         .setUserAgent(originalRequestConfig.getUserAgent())
                         .setConnectionManager(getConnectionManager(originalRequestConfig, ioreactor))
-                        .build(), ioreactor));
+                        .build(), ioreactor, defaultConfig));
     }
     
     private DefaultConnectingIOReactor getIoReactor() {

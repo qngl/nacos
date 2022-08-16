@@ -24,6 +24,9 @@ import com.alibaba.nacos.api.selector.Selector;
 import com.alibaba.nacos.auth.annotation.Secured;
 import com.alibaba.nacos.common.model.RestResult;
 import com.alibaba.nacos.common.model.RestResultUtils;
+import com.alibaba.nacos.common.notify.NotifyCenter;
+import com.alibaba.nacos.common.trace.event.naming.DeregisterServiceTraceEvent;
+import com.alibaba.nacos.common.trace.event.naming.RegisterServiceTraceEvent;
 import com.alibaba.nacos.common.utils.IoUtils;
 import com.alibaba.nacos.common.utils.JacksonUtils;
 import com.alibaba.nacos.common.utils.NumberUtils;
@@ -119,6 +122,8 @@ public class ServiceController {
         serviceMetadata.setExtendData(UtilsAndCommons.parseMetadata(metadata));
         serviceMetadata.setEphemeral(false);
         getServiceOperator().create(namespaceId, serviceName, serviceMetadata);
+        NotifyCenter.publishEvent(new RegisterServiceTraceEvent(System.currentTimeMillis(),
+                namespaceId, NamingUtils.getGroupName(serviceName), NamingUtils.getServiceName(serviceName)));
         return "ok";
     }
     
@@ -136,6 +141,8 @@ public class ServiceController {
             @RequestParam String serviceName) throws Exception {
         
         getServiceOperator().delete(namespaceId, serviceName);
+        NotifyCenter.publishEvent(new DeregisterServiceTraceEvent(System.currentTimeMillis(),
+                namespaceId, "", serviceName));
         return "ok";
     }
     
@@ -342,6 +349,8 @@ public class ServiceController {
         
         ObjectNode result = JacksonUtils.createEmptyJsonNode();
         
+        int count = 0;
+        
         try {
             List<Subscriber> subscribers = subscribeManager.getSubscribers(serviceName, namespaceId, aggregation);
             
@@ -351,7 +360,7 @@ public class ServiceController {
             }
             
             int end = start + pageSize;
-            int count = subscribers.size();
+            count = subscribers.size();
             if (end > count) {
                 end = count;
             }
@@ -363,7 +372,7 @@ public class ServiceController {
         } catch (Exception e) {
             Loggers.SRV_LOG.warn("query subscribers failed!", e);
             result.replace("subscribers", JacksonUtils.createEmptyArrayNode());
-            result.put("count", 0);
+            result.put("count", count);
             return result;
         }
     }
